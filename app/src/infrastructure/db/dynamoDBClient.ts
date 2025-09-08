@@ -47,13 +47,43 @@ export const DynamoDBUserRepository = {
   },
 
   async updateProfileImage(uuid: string, imageUrl: string): Promise<void> {
-    await dynamo
-      .update({
+    try {
+      await dynamo
+        .update({
+          TableName: USERS_TABLE!,
+          Key: { uuid },
+          UpdateExpression: "set profileImageUrl = :url",
+          ExpressionAttributeValues: { ":url": imageUrl },
+          ReturnValues: "UPDATED_NEW",
+        })
+        .promise();
+
+      console.log("Profile image updated for user:", { uuid, imageUrl });
+    } catch (err) {
+      console.error("Error updating profile image:", err);
+      throw err;
+    }
+  },
+
+  async findById(document: string): Promise<IUser | null> {
+    try {
+      const params = {
         TableName: USERS_TABLE!,
-        Key: { uuid },
-        UpdateExpression: "set profileImageUrl = :url",
-        ExpressionAttributeValues: { ":url": imageUrl },
-      })
-      .promise();
+        IndexName: "document",
+        KeyConditionExpression: "document = :document",
+        ExpressionAttributeValues: {
+          ":document": document.toString(),
+        },
+        Limit: 1,
+      };
+
+      const result = await dynamo.query(params).promise();
+      return result.Items && result.Items.length > 0
+        ? (result.Items[0] as IUser)
+        : null;
+    } catch (err) {
+      console.error("Error getting user by document:", err);
+      throw err;
+    }
   },
 };

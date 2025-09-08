@@ -4,9 +4,15 @@ import { DynamoDBUserRepository } from "../db/dynamoDBClient";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcryptjs";
+import { GetUserByIdService } from "../../application/services/userGetByID";
+import { UpdateProfileImageService } from "../../application/services/userProfileImage";
 
 const userRegisterService = new UserRegisterService(DynamoDBUserRepository);
 const userLoginService = new UserLoginService(DynamoDBUserRepository);
+const getUserByIdService = new GetUserByIdService(DynamoDBUserRepository);
+const updateProfileImageService = new UpdateProfileImageService(
+  DynamoDBUserRepository
+);
 const s3 = new S3Client({});
 const BUCKET = process.env.PROFILE_IMAGES_BUCKET!;
 
@@ -17,6 +23,7 @@ function isValidEmail(e: string) {
 export const handler = async (event: any, context: any) => {
   const path = event.path;
   const method = event.httpMethod;
+  const pathParameters = event.pathParameters || {};
 
   try {
     if (path === "/register" && method === "POST") {
@@ -124,6 +131,105 @@ export const handler = async (event: any, context: any) => {
         statusCode: 200,
         body: JSON.stringify({ message: "Imagen actualizada", imageUrl }),
       };
+    }
+
+    if (path.startsWith("/profile/") && method === "GET") {
+      const document = pathParameters.id || path.split("/")[2];
+
+      if (!document) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Document is required" }),
+        };
+      }
+
+      const user = await getUserByIdService.execute(document);
+
+      if (!user) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ message: "User not found" }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: "User retrieved successfully",
+          data: user,
+        }),
+      };
+    }
+
+    if (path === "/profile-image" && method === "POST") {
+      const body = event.body ? JSON.parse(event.body) : null;
+      const { uuid, imageBase64 } = body || {};
+
+      if (!uuid || !imageBase64) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Missing uuid or imageBase64" }),
+        };
+      }
+
+      // Verificar que imageBase64 sea un string válido
+      if (
+        typeof imageBase64 !== "string" ||
+        !imageBase64.startsWith("data:image/")
+      ) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({
+            message: "Invalid image format. Expected base64 string",
+          }),
+        };
+      }
+
+      try {
+        // Extraer el contenido base64
+        const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
+        const buffer = Buffer.from(base64Data, "base64");
+
+        if (buffer.length === 0) {
+          return {
+            statusCode: 400,
+            body: JSON.stringify({ message: "Invalid base64 image data" }),
+          };
+        }
+
+        // Generar nombre único para la imagen
+        const imageName = `profile_${uuid}_${uuidv4()}.jpg`;
+
+        // Subir a S3
+        await s3.send(
+          new PutObjectCommand({
+            Bucket: BUCKET,
+            Key: imageName,
+            Body: buffer,
+            ContentType: "image/jpeg",
+            ACL: "public-read",
+          })
+        );
+
+        const imageUrl = `https://${BUCKET}.s3.amazonaws.com/${imageName}`;
+
+        // Actualizar DynamoDB usando el servicio
+        await updateProfileImageService.execute(uuid, imageUrl);
+
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            message: "Imagen actualizada exitosamente",
+            imageUrl,
+          }),
+        };
+      } catch (err: any) {
+        console.error("Error uploading profile image:", err);
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ message: "Error al subir la imagen" }),
+        };
+      }
     }
 
     return {

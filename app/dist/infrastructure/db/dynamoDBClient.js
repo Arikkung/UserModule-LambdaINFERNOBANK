@@ -51,4 +51,25 @@ exports.DynamoDBUserRepository = {
         })
             .promise();
     },
+    async findById(document) {
+        try {
+            const params = {
+                TableName: USERS_TABLE,
+                IndexName: "document",
+                KeyConditionExpression: "document = :document",
+                ExpressionAttributeValues: {
+                    ":document": document.toString(),
+                },
+                Limit: 1,
+            };
+            const result = await dynamo.query(params).promise();
+            return result.Items && result.Items.length > 0
+                ? result.Items[0]
+                : null;
+        }
+        catch (err) {
+            console.error("Error getting user by document:", err);
+            throw err;
+        }
+    },
 };

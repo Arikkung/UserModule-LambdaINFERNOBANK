@@ -10,8 +10,10 @@ const dynamoDBClient_1 = require("../db/dynamoDBClient");
 const client_s3_1 = require("@aws-sdk/client-s3");
 const uuid_1 = require("uuid");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
+const userGetByID_1 = require("../../application/services/userGetByID");
 const userRegisterService = new userRegisterService_1.UserRegisterService(dynamoDBClient_1.DynamoDBUserRepository);
 const userLoginService = new userLoginService_1.UserLoginService(dynamoDBClient_1.DynamoDBUserRepository);
+const getUserByIdService = new userGetByID_1.GetUserByIdService(dynamoDBClient_1.DynamoDBUserRepository);
 const s3 = new client_s3_1.S3Client({});
 const BUCKET = process.env.PROFILE_IMAGES_BUCKET;
 function isValidEmail(e) {
@@ -20,6 +22,7 @@ function isValidEmail(e) {
 const handler = async (event, context) => {
     const path = event.path;
     const method = event.httpMethod;
+    const pathParameters = event.pathParameters || {};
     try {
         if (path === "/register" && method === "POST") {
             const body = event.body ? JSON.parse(event.body) : null;
@@ -103,6 +106,29 @@ const handler = async (event, context) => {
             return {
                 statusCode: 200,
                 body: JSON.stringify({ message: "Imagen actualizada", imageUrl }),
+            };
+        }
+        if (path.startsWith("/profile/") && method === "GET") {
+            const document = pathParameters.id || path.split("/")[2]; // ← Ahora es document
+            if (!document) {
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({ message: "Document is required" }),
+                };
+            }
+            const user = await getUserByIdService.execute(document); // ← Cambiado
+            if (!user) {
+                return {
+                    statusCode: 404,
+                    body: JSON.stringify({ message: "User not found" }),
+                };
+            }
+            return {
+                statusCode: 200,
+                body: JSON.stringify({
+                    message: "User retrieved successfully",
+                    data: user,
+                }),
             };
         }
         return {
