@@ -1,0 +1,25 @@
+{
+    "name": "user-module-infernobank",
+    "version": "1.0.0",
+    "description": "AWS Lambda function for user registration using TypeScript and Terraform",
+    "main": "dist/index.js",
+    "scripts": {
+        "build": "tsc",
+        "deploy": "npm run build && terraform apply -auto-approve",
+        "destroy": "terraform destroy -auto-approve",
+        "lint": "eslint . --ext .ts",
+        "prepare": "npm run build && terraform init"
+    },
+    "dependencies": {
+        "aws-sdk": "^2.1360.0",
+        "bcryptjs": "^3.0.2",
+        "uuid": "^11.1.0"
+    },
+    "devDependencies": {
+        "@types/aws-lambda": "^8.10.119",
+        "@types/node": "^20.8.0",
+        "@types/uuid": "^10.0.0",
+        "eslint": "^8.50.0",
+        "typescript": "^5.2.2"
+    }
+}
