@@ -11,6 +11,7 @@
         "prepare": "npm run build && terraform init"
     },
     "dependencies": {
+        "@aws-sdk/client-s3": "^3.884.0",
         "aws-sdk": "^2.1360.0",
         "bcryptjs": "^3.0.2",
         "jsonwebtoken": "^9.0.2",

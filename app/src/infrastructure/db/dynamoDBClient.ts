@@ -34,7 +34,7 @@ export const DynamoDBUserRepository = {
           ":email": email.toLowerCase(),
         },
         Limit: 1,
-      };
+      };    
 
       const result = await dynamo.query(params).promise();
       return result.Items && result.Items.length > 0
@@ -45,6 +45,38 @@ export const DynamoDBUserRepository = {
       throw err;
     }
   },
+
+  async updateProfileInfo(uuid: string, address: string, phone: string): Promise<void> {
+    const updateExpressionParts: string[] = [];
+    const exprAttrValues: any = {};
+
+    if (address) {
+      updateExpressionParts.push("address = :address");
+      exprAttrValues[":address"] = address;
+    }
+
+    if (phone) {
+      updateExpressionParts.push("phone = :phone");
+      exprAttrValues[":phone"] = phone;
+    }
+
+    if (updateExpressionParts.length === 0) {
+      throw new Error("No fields to update");
+    }
+
+    const updateExpression = "set " + updateExpressionParts.join(", ");
+
+    await dynamo
+      .update({
+        TableName: USERS_TABLE!,
+        Key: { uuid },
+        UpdateExpression: updateExpression,
+        ExpressionAttributeValues: exprAttrValues,
+      })
+      .promise();
+
+      console.log("Updated user profile:", { uuid, ...exprAttrValues });
+   },
 
   async updateProfileImage(uuid: string, imageUrl: string): Promise<void> {
     await dynamo

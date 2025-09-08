@@ -93,6 +93,37 @@ export const handler = async (event: any, context: any) => {
       };
     }
 
+    if (path.includes("/profile/") && method === "PUT") {
+      const userId = path.split("/").pop();
+      const body = event.body ? JSON.parse(event.body) : null;
+
+      if (!userId || !body) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Missing user_id or body" }),
+        };
+      }
+
+      const { address, phone } = body;
+
+      if (!address && !phone) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Nothing to update" }),
+        };
+      }
+
+      await DynamoDBUserRepository.updateProfileInfo(userId, address, phone);
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: "User updated successfully",
+          updatedFields: { address, phone },
+        }),
+      };
+    }
+
     if (path === "/profile-image" && method === "POST") {
       const body = event.body ? JSON.parse(event.body) : null;
       const { uuid, imageBase64 } = body || {};
