@@ -21,7 +21,10 @@ const handler = async (event) => {
             typeof body.password !== "string" ||
             typeof body.document !== "string" ||
             !isValidEmail(body.email)) {
-            return { statusCode: 400, body: JSON.stringify({ message: "Invalid input" }) };
+            return {
+                statusCode: 400,
+                body: JSON.stringify({ message: "Invalid input" }),
+            };
         }
         const hashedPassword = await bcryptjs_1.default.hash(body.password, 10);
         const user = {
@@ -32,6 +35,7 @@ const handler = async (event) => {
             password: hashedPassword,
             document: body.document,
             createdAt: new Date().toISOString(),
+            profileImageUrl: "", // <-- Agrega este campo
         };
         await userRegisterService.register(user);
         return {
@@ -51,7 +55,10 @@ const handler = async (event) => {
     }
     catch (err) {
         console.error("Handler error:", err);
-        return { statusCode: 500, body: JSON.stringify({ message: "Internal Server Error" }) };
+        return {
+            statusCode: 500,
+            body: JSON.stringify({ message: "Internal Server Error" }),
+        };
     }
 };
 exports.handler = handler;
