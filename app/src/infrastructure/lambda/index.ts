@@ -4,6 +4,7 @@ import { DynamoDBUserRepository } from "../db/dynamoDBClient";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcryptjs";
+import { GetUserByIdService } from "../../application/services/userGetbyID";
 
 const userRegisterService = new UserRegisterService(DynamoDBUserRepository);
 const userLoginService = new UserLoginService(DynamoDBUserRepository);
@@ -17,6 +18,8 @@ function isValidEmail(e: string) {
 export const handler = async (event: any, context: any) => {
   const path = event.path;
   const method = event.httpMethod;
+  const pathParameters = event.pathParameters || {};
+  const getUserByIdService = new GetUserByIdService(DynamoDBUserRepository);
 
   try {
     if (path === "/register" && method === "POST") {
@@ -88,6 +91,34 @@ export const handler = async (event: any, context: any) => {
         statusCode: 200,
         body: JSON.stringify({
           message: "Login exitoso",
+          data: user,
+        }),
+      };
+    }
+
+    if (path.startsWith("/profile/") && method === "GET") {
+      const document = pathParameters.id || path.split("/")[2];
+
+      if (!document) {
+        return {
+          statusCode: 400,
+          body: JSON.stringify({ message: "Document is required" }),
+        };
+      }
+
+      const user = await getUserByIdService.execute(document);
+
+      if (!user) {
+        return {
+          statusCode: 404,
+          body: JSON.stringify({ message: "User not found" }),
+        };
+      }
+
+      return {
+        statusCode: 200,
+        body: JSON.stringify({
+          message: "User retrieved successfully",
           data: user,
         }),
       };

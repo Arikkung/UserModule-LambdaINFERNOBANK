@@ -34,7 +34,7 @@ export const DynamoDBUserRepository = {
           ":email": email.toLowerCase(),
         },
         Limit: 1,
-      };    
+      };
 
       const result = await dynamo.query(params).promise();
       return result.Items && result.Items.length > 0
@@ -42,6 +42,28 @@ export const DynamoDBUserRepository = {
         : null;
     } catch (err) {
       console.error("Error querying by email:", err);
+      throw err;
+    }
+  },
+
+  async findById(document: string): Promise<IUser | null> {
+    try {
+      const params = {
+        TableName: USERS_TABLE!,
+        IndexName: "document",
+        KeyConditionExpression: "document = :document",
+        ExpressionAttributeValues: {
+          ":document": document.toString(),
+        },
+        Limit: 1,
+      };
+
+      const result = await dynamo.query(params).promise();
+      return result.Items && result.Items.length > 0
+        ? (result.Items[0] as IUser)
+        : null;
+    } catch (err) {
+      console.error("Error getting user by document:", err);
       throw err;
     }
   },
