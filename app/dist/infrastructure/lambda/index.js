@@ -11,8 +11,11 @@ const client_s3_1 = require("@aws-sdk/client-s3");
 const uuid_1 = require("uuid");
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const userGetbyID_1 = require("../../application/services/userGetbyID");
+const userProfilePicture_1 = require("../../application/services/userProfilePicture");
 const userRegisterService = new userRegisterService_1.UserRegisterService(dynamoDBClient_1.DynamoDBUserRepository);
 const userLoginService = new userLoginService_1.UserLoginService(dynamoDBClient_1.DynamoDBUserRepository);
+const getUserByIdService = new userGetbyID_1.GetUserByIdService(dynamoDBClient_1.DynamoDBUserRepository);
+const updateProfileImageService = new userProfilePicture_1.UpdateProfileImageService(dynamoDBClient_1.DynamoDBUserRepository);
 const s3 = new client_s3_1.S3Client({});
 const BUCKET = process.env.PROFILE_IMAGES_BUCKET;
 function isValidEmail(e) {
@@ -22,7 +25,6 @@ const handler = async (event, context) => {
     const path = event.path;
     const method = event.httpMethod;
     const pathParameters = event.pathParameters || {};
-    const getUserByIdService = new userGetbyID_1.GetUserByIdService(dynamoDBClient_1.DynamoDBUserRepository);
     try {
         if (path === "/register" && method === "POST") {
             const body = event.body ? JSON.parse(event.body) : null;
@@ -131,30 +133,93 @@ const handler = async (event, context) => {
                 }),
             };
         }
-        if (path === "/profile-image" && method === "POST") {
+        if (path.startsWith("/profile/") &&
+            path.endsWith("/avatar") &&
+            method === "POST") {
+            const pathParts = path.split("/");
+            const user_id = pathParts[2];
             const body = event.body ? JSON.parse(event.body) : null;
-            const { uuid, imageBase64 } = body || {};
-            if (!uuid || !imageBase64) {
+            const { image, fileType } = body || {}; // Cambia aquí
+            if (!user_id || !image) {
+                // Y aquí
                 return {
                     statusCode: 400,
-                    body: JSON.stringify({ message: "Missing uuid or imageBase64" }),
+                    body: JSON.stringify({ message: "Missing user_id or image" }),
                 };
             }
-            const buffer = Buffer.from(imageBase64, "base64");
-            const imageName = `profile_${uuid}_${(0, uuid_1.v4)()}.jpg`;
-            await s3.send(new client_s3_1.PutObjectCommand({
-                Bucket: BUCKET,
-                Key: imageName,
-                Body: buffer,
-                ContentType: "image/jpeg",
-                ACL: "public-read",
-            }));
-            const imageUrl = `https://${BUCKET}.s3.amazonaws.com/${imageName}`;
-            await dynamoDBClient_1.DynamoDBUserRepository.updateProfileImage(uuid, imageUrl);
-            return {
-                statusCode: 200,
-                body: JSON.stringify({ message: "Imagen actualizada", imageUrl }),
-            };
+            if (typeof image !== "string" || !image.startsWith("data:image/")) {
+                return {
+                    statusCode: 400,
+                    body: JSON.stringify({
+                        message: "Invalid image format. Expected base64 string",
+                    }),
+                };
+            }
+            try {
+                const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+                const buffer = Buffer.from(base64Data, "base64");
+                if (buffer.length === 0) {
+                    return {
+                        statusCode: 400,
+                        body: JSON.stringify({ message: "Invalid base64 image data" }),
+                    };
+                }
+                // Buscar usuario por document (user_id)
+                const user = await dynamoDBClient_1.DynamoDBUserRepository.findById(user_id);
+                if (!user) {
+                    return {
+                        statusCode: 404,
+                        body: JSON.stringify({ message: "User not found" }),
+                    };
+                }
+                // Determinar la extensión del archivo basado en fileType o en el data URL
+                let extension = "jpg";
+                if (fileType) {
+                    extension = fileType.split("/")[1]; // extrae "jpeg", "png", etc.
+                }
+                else if (image.includes("data:image/")) {
+                    const match = image.match(/data:image\/(\w+);base64/);
+                    if (match && match[1]) {
+                        extension = match[1];
+                    }
+                }
+                // Generar nombre de imagen
+                const imageName = `avatar_${user_id}_${(0, uuid_1.v4)()}.${extension}`;
+                // Determinar ContentType
+                const contentType = fileType || `image/${extension}`;
+                await s3.send(new client_s3_1.PutObjectCommand({
+                    Bucket: BUCKET,
+                    Key: imageName,
+                    Body: buffer,
+                    ContentType: contentType,
+                    ACL: "public-read",
+                }));
+                const imageUrl = `https://${BUCKET}.s3.amazonaws.com/${imageName}`;
+                // Actualizar con la URL real
+                await dynamoDBClient_1.DynamoDBUserRepository.updateProfileImage(user_id, imageUrl);
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: "Avatar actualizado exitosamente",
+                        imageUrl,
+                        user: {
+                            uuid: user.uuid,
+                            name: user.name,
+                            lastName: user.lastName,
+                            email: user.email,
+                            document: user.document,
+                            profileImageUrl: imageUrl,
+                        },
+                    }),
+                };
+            }
+            catch (err) {
+                console.error("Error uploading avatar image:", err);
+                return {
+                    statusCode: 500,
+                    body: JSON.stringify({ message: "Error al subir el avatar" }),
+                };
+            }
         }
         return {
             statusCode: 404,
