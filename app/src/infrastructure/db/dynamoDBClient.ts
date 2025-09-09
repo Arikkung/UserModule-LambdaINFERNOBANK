@@ -46,7 +46,25 @@ export const DynamoDBUserRepository = {
     }
   },
 
-  async updateProfileInfo(uuid: string, address: string, phone: string): Promise<void> {
+  async updateProfileInfo(
+    document: string,
+    address: string,
+    phone: string
+  ): Promise<void> {
+    const result = await dynamo
+      .scan({
+        TableName: USERS_TABLE!,
+        FilterExpression: "document = :doc",
+        ExpressionAttributeValues: { ":doc": document },
+      })
+      .promise();
+
+    if (!result.Items || result.Items.length === 0) {
+      throw new Error("User not found");
+    }
+
+    const user = result.Items[0];
+
     const updateExpressionParts: string[] = [];
     const exprAttrValues: any = {};
 
@@ -69,14 +87,14 @@ export const DynamoDBUserRepository = {
     await dynamo
       .update({
         TableName: USERS_TABLE!,
-        Key: { uuid },
+        Key: { uuid: user.uuid, document: user.document },
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: exprAttrValues,
       })
       .promise();
 
-      console.log("Updated user profile:", { uuid, ...exprAttrValues });
-   },
+    console.log("Updated user profile:", { document, ...exprAttrValues });
+  },
 
   async updateProfileImage(uuid: string, imageUrl: string): Promise<void> {
     await dynamo

@@ -94,7 +94,7 @@ export const handler = async (event: any, context: any) => {
     }
 
     if (path.includes("/profile/") && method === "PUT") {
-      const userId = path.split("/").pop();
+      const userId = event.pathParameters.id;
       const body = event.body ? JSON.parse(event.body) : null;
 
       if (!userId || !body) {
