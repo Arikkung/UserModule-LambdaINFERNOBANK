@@ -62,6 +62,30 @@ exports.DynamoDBUserRepository = {
             throw err;
         }
     },
+    async updateProfileImage(document, imageUrl) {
+        try {
+            const user = await this.findById(document);
+            if (!user) {
+                throw new Error("User not found");
+            }
+            await dynamo
+                .update({
+                TableName: USERS_TABLE,
+                Key: {
+                    uuid: user.uuid,
+                    document: document,
+                },
+                UpdateExpression: "set profileImageUrl = :url",
+                ExpressionAttributeValues: { ":url": imageUrl },
+                ReturnValues: "UPDATED_NEW",
+            })
+                .promise();
+        }
+        catch (err) {
+            console.error("Error updating profile image:", err);
+            throw err;
+        }
+    },
     async updateProfileInfo(document, address, phone) {
         const result = await dynamo
             .scan({
@@ -97,15 +121,5 @@ exports.DynamoDBUserRepository = {
         })
             .promise();
         console.log("Updated user profile:", { document, ...exprAttrValues });
-    },
-    async updateProfileImage(uuid, imageUrl) {
-        await dynamo
-            .update({
-            TableName: USERS_TABLE,
-            Key: { uuid },
-            UpdateExpression: "set profileImageUrl = :url",
-            ExpressionAttributeValues: { ":url": imageUrl },
-        })
-            .promise();
     },
 };
