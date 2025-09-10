@@ -17,7 +17,8 @@ const updateProfileImageService = new UpdateProfileImageService(
 const s3 = new S3Client({});
 const BUCKET = process.env.PROFILE_IMAGES_BUCKET!;
 const sqs = new SQS();
-const CardUrlReq = process.env.CARD_REQUEST_SQS_URL || "";
+const CardUrlReq = process.env.CARD_REQUEST_SQS_URL;
+const WelcomeNotification = process.env.WELCOME_NOTIFICATION_SQS_URL;
 
 function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -30,12 +31,11 @@ export const handler = async (event: any, context: any) => {
 
   console.log("1:", CardUrlReq);
 
-
   try {
     console.log("2:", CardUrlReq);
     if (path === "/register" && method === "POST") {
       const body = event.body ? JSON.parse(event.body) : null;
-        console.log("3:", CardUrlReq);
+      console.log("3:", CardUrlReq);
       if (
         !body ||
         typeof body.name !== "string" ||
@@ -63,22 +63,30 @@ export const handler = async (event: any, context: any) => {
         profileImageUrl: "",
       };
 
-      console.log(CardUrlReq + '1');
-
       await userRegisterService.register(user);
 
-      console.log(CardUrlReq + '2');
+      console.log("user:", user.uuid);
+
       if (CardUrlReq) {
         try {
-          await sqs.sendMessage({
-            QueueUrl: CardUrlReq,
-            MessageBody: JSON.stringify({
-              userId: user.uuid,
-              request: "DEBIT"
+          const messageData = {
+            UserId: user.uuid,
+            Request: "DEBIT",
+          };
+
+          const messageBody = JSON.stringify(messageData);
+
+          console.log("📤 Enviando a SQS - URL:", CardUrlReq);
+          console.log("📦 Mensaje SQS (string):", messageBody);
+
+          await sqs
+            .sendMessage({
+              QueueUrl: CardUrlReq,
+              MessageBody: messageBody,
             })
-          }).promise();
+            .promise();
         } catch (sqsError) {
-          console.log("Error enviando mensaje a SQS:", sqsError);
+          console.error("❌ Error enviando mensaje a SQS:", sqsError);
         }
       }
 
@@ -116,6 +124,44 @@ export const handler = async (event: any, context: any) => {
           statusCode: 401,
           body: JSON.stringify({ message: "Credenciales inválidas" }),
         };
+      }
+
+      // ENVÍO DE NOTIFICACIÓN DE LOGIN A TRAVÉS DE SQS
+      if (WelcomeNotification) {
+        try {
+          const messageData = {
+            uuid: `login-${uuidv4().substring(0, 8)}`,
+            type: "USER.LOGIN",
+            userEmail: user.email,
+            userId: user.uuid,
+            data: {
+              date: new Date().toISOString(),
+            },
+          };
+
+          const messageBody = JSON.stringify(messageData);
+
+          console.log(
+            "📤 Enviando notificación de login a SQS - URL:",
+            WelcomeNotification
+          );
+          console.log("📦 Mensaje SQS:", messageBody);
+
+          await sqs
+            .sendMessage({
+              QueueUrl: WelcomeNotification,
+              MessageBody: messageBody,
+            })
+            .promise();
+
+          console.log("✅ Notificación de login enviada exitosamente");
+        } catch (sqsError) {
+          console.error(
+            "❌ Error enviando notificación de login a SQS:",
+            sqsError
+          );
+          // No fallar el login si hay error en la notificación
+        }
       }
 
       return {
