@@ -34,7 +34,7 @@ export const DynamoDBUserRepository = {
           ":email": email.toLowerCase(),
         },
         Limit: 1,
-      };    
+      };
 
       const result = await dynamo.query(params).promise();
       return result.Items && result.Items.length > 0
@@ -42,6 +42,54 @@ export const DynamoDBUserRepository = {
         : null;
     } catch (err) {
       console.error("Error querying by email:", err);
+      throw err;
+    }
+  },
+
+  async findById(document: string): Promise<IUser | null> {
+    try {
+      const params = {
+        TableName: USERS_TABLE!,
+        IndexName: "document",
+        KeyConditionExpression: "document = :document",
+        ExpressionAttributeValues: {
+          ":document": document.toString(),
+        },
+        Limit: 1,
+      };
+
+      const result = await dynamo.query(params).promise();
+      return result.Items && result.Items.length > 0
+        ? (result.Items[0] as IUser)
+        : null;
+    } catch (err) {
+      console.error("Error getting user by document:", err);
+      throw err;
+    }
+  },
+
+  async updateProfileImage(document: string, imageUrl: string): Promise<void> {
+    try {
+      const user = await this.findById(document);
+
+      if (!user) {
+        throw new Error("User not found");
+      }
+
+      await dynamo
+        .update({
+          TableName: USERS_TABLE!,
+          Key: {
+            uuid: user.uuid,
+            document: document,
+          },
+          UpdateExpression: "set profileImageUrl = :url",
+          ExpressionAttributeValues: { ":url": imageUrl },
+          ReturnValues: "UPDATED_NEW",
+        })
+        .promise();
+    } catch (err) {
+      console.error("Error updating profile image:", err);
       throw err;
     }
   },
@@ -94,16 +142,5 @@ export const DynamoDBUserRepository = {
       .promise();
 
     console.log("Updated user profile:", { document, ...exprAttrValues });
-  },
-
-  async updateProfileImage(uuid: string, imageUrl: string): Promise<void> {
-    await dynamo
-      .update({
-        TableName: USERS_TABLE!,
-        Key: { uuid },
-        UpdateExpression: "set profileImageUrl = :url",
-        ExpressionAttributeValues: { ":url": imageUrl },
-      })
-      .promise();
   },
 };
