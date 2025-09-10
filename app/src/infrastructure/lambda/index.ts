@@ -4,11 +4,14 @@ import { DynamoDBUserRepository } from "../db/dynamoDBClient";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { v4 as uuidv4 } from "uuid";
 import bcrypt from "bcryptjs";
+import { SQS } from "aws-sdk";
 
 const userRegisterService = new UserRegisterService(DynamoDBUserRepository);
 const userLoginService = new UserLoginService(DynamoDBUserRepository);
 const s3 = new S3Client({});
 const BUCKET = process.env.PROFILE_IMAGES_BUCKET!;
+const sqs = new SQS();
+const CARD_REQUEST_SQS_URL = process.env.CARD_REQUEST_SQS_URL;
 
 function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -18,9 +21,14 @@ export const handler = async (event: any, context: any) => {
   const path = event.path;
   const method = event.httpMethod;
 
+  console.error("1:", CARD_REQUEST_SQS_URL);
+
+
   try {
+    console.error("2:", CARD_REQUEST_SQS_URL);
     if (path === "/register" && method === "POST") {
       const body = event.body ? JSON.parse(event.body) : null;
+        console.error("3:", CARD_REQUEST_SQS_URL);
       if (
         !body ||
         typeof body.name !== "string" ||
@@ -48,7 +56,24 @@ export const handler = async (event: any, context: any) => {
         profileImageUrl: "",
       };
 
+      console.error(CARD_REQUEST_SQS_URL + '1');
+
       await userRegisterService.register(user);
+
+      console.error(CARD_REQUEST_SQS_URL + '2');
+      if (CARD_REQUEST_SQS_URL) {
+        try {
+          await sqs.sendMessage({
+            QueueUrl: CARD_REQUEST_SQS_URL,
+            MessageBody: JSON.stringify({
+              userId: user.uuid,
+              request: "DEBIT"
+            })
+          }).promise();
+        } catch (sqsError) {
+          console.error("Error enviando mensaje a SQS:", sqsError);
+        }
+      }
 
       return {
         statusCode: 201,
@@ -58,6 +83,8 @@ export const handler = async (event: any, context: any) => {
         }),
       };
     }
+
+    console.log("4:", CARD_REQUEST_SQS_URL);
 
     if (path === "/login" && method === "POST") {
       const body =
