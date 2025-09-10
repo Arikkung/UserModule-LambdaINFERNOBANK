@@ -17,7 +17,7 @@ const updateProfileImageService = new UpdateProfileImageService(
 const s3 = new S3Client({});
 const BUCKET = process.env.PROFILE_IMAGES_BUCKET!;
 const sqs = new SQS();
-const CARD_REQUEST_SQS_URL = process.env.CARD_REQUEST_SQS_URL;
+const CardUrlReq = process.env.CARD_REQUEST_SQS_URL || "";
 
 function isValidEmail(e: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
@@ -28,14 +28,14 @@ export const handler = async (event: any, context: any) => {
   const method = event.httpMethod;
   const pathParameters = event.pathParameters || {};
 
-  console.error("1:", CARD_REQUEST_SQS_URL);
+  console.log("1:", CardUrlReq);
 
 
   try {
-    console.error("2:", CARD_REQUEST_SQS_URL);
+    console.log("2:", CardUrlReq);
     if (path === "/register" && method === "POST") {
       const body = event.body ? JSON.parse(event.body) : null;
-        console.error("3:", CARD_REQUEST_SQS_URL);
+        console.log("3:", CardUrlReq);
       if (
         !body ||
         typeof body.name !== "string" ||
@@ -63,22 +63,22 @@ export const handler = async (event: any, context: any) => {
         profileImageUrl: "",
       };
 
-      console.error(CARD_REQUEST_SQS_URL + '1');
+      console.log(CardUrlReq + '1');
 
       await userRegisterService.register(user);
 
-      console.error(CARD_REQUEST_SQS_URL + '2');
-      if (CARD_REQUEST_SQS_URL) {
+      console.log(CardUrlReq + '2');
+      if (CardUrlReq) {
         try {
           await sqs.sendMessage({
-            QueueUrl: CARD_REQUEST_SQS_URL,
+            QueueUrl: CardUrlReq,
             MessageBody: JSON.stringify({
               userId: user.uuid,
               request: "DEBIT"
             })
           }).promise();
         } catch (sqsError) {
-          console.error("Error enviando mensaje a SQS:", sqsError);
+          console.log("Error enviando mensaje a SQS:", sqsError);
         }
       }
 
@@ -91,7 +91,7 @@ export const handler = async (event: any, context: any) => {
       };
     }
 
-    console.log("4:", CARD_REQUEST_SQS_URL);
+    console.log("4:", CardUrlReq);
 
     if (path === "/login" && method === "POST") {
       const body =
@@ -283,10 +283,10 @@ export const handler = async (event: any, context: any) => {
           }),
         };
       } catch (err: any) {
-        console.error("Error uploading avatar image:", err);
+        console.log("log uploading avatar image:", err);
         return {
           statusCode: 500,
-          body: JSON.stringify({ message: "Error al subir el avatar" }),
+          body: JSON.stringify({ message: "log al subir el avatar" }),
         };
       }
     }
@@ -296,10 +296,10 @@ export const handler = async (event: any, context: any) => {
       body: JSON.stringify({ message: "Not Found" }),
     };
   } catch (err: any) {
-    console.error("Handler error:", err);
+    console.log("Handler log:", err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ message: "Internal Server Error" }),
+      body: JSON.stringify({ message: "Internal Server log" }),
     };
   }
 };
